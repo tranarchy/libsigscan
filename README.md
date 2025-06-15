@@ -20,5 +20,3 @@ char *module_target = "example.so"
 
 unsigned long long match = sig_scan(pattern, module_target, pid);
 ```
-
-For a full example click [here](https://github.com/tranarchy/benzo)
