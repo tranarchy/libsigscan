@@ -24,16 +24,12 @@ static int hex_to_byte(char c) {
     return -1;
 }
 
-static size_t get_pattern_len(char *pattern, uint8_t *pattern_bytes, int *pattern_mask, size_t max_len) {
+static size_t get_pattern_len(char *pattern, uint8_t *pattern_bytes, int *pattern_mask) {
     size_t pattern_len = 0;
 
     char *p = pattern;
 
-    while (*p != '\0' && pattern_len < max_len) {
-        if (*p == '\0') {
-            break;
-        }
-
+    while (*p != '\0') {
         while (*p == ' ') {
             p++;
         }
@@ -68,7 +64,7 @@ unsigned long long sig_scan(char* pattern, char *target_file, pid_t pid) {
     char maps_path[128];
     char line[1024];
 
-    pattern_len = get_pattern_len(pattern, pattern_bytes, pattern_mask, MAX_PATTERN_LEN);
+    pattern_len = get_pattern_len(pattern, pattern_bytes, pattern_mask);
 
     unsigned char *read_buff = (unsigned char*)malloc(MEMORY_CHUNK_SIZE + pattern_len - 1);
 
