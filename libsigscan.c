@@ -9,8 +9,7 @@
 
 #include <sys/uio.h>
 
-#define MAX_PATTERN_LEN 128
-#define MEMORY_CHUNK_SIZE 1024
+#define BYTES_TO_READ 1024
 
 static int hex_to_byte(char c) {
     if (c >= '0' && c <= '9') {
@@ -55,18 +54,18 @@ static size_t get_pattern_len(char *pattern, uint8_t *pattern_bytes, int *patter
     return pattern_len;
 }
 
-unsigned long long sig_scan(char* pattern, char *target_file, pid_t pid) {
+unsigned long long sig_scan(char* pattern, char *target_module, pid_t pid) {
     size_t pattern_len;
 
-    uint8_t pattern_bytes[MAX_PATTERN_LEN];
-    int pattern_mask[MAX_PATTERN_LEN];
+    uint8_t pattern_bytes[128];
+    int pattern_mask[128];
 
     char maps_path[128];
     char line[1024];
 
-    pattern_len = get_pattern_len(pattern, pattern_bytes, pattern_mask);
+    unsigned char read_buff[BYTES_TO_READ];
 
-    unsigned char *read_buff = (unsigned char*)malloc(MEMORY_CHUNK_SIZE + pattern_len - 1);
+    pattern_len = get_pattern_len(pattern, pattern_bytes, pattern_mask);
 
     snprintf(maps_path, 128, "/proc/%d/maps", pid);
 
@@ -82,38 +81,30 @@ unsigned long long sig_scan(char* pattern, char *target_file, pid_t pid) {
             continue;
         }
 
-        if (target_file != NULL) {
-            if (strstr(line, target_file) == NULL) {
+        if (target_module != NULL) {
+            if (strstr(line, target_module) == NULL) {
                 continue;
             }
         }
 
-        for (unsigned long long i = start_addr; i < end_addr; i += MEMORY_CHUNK_SIZE) {
-            size_t bytes_left = end_addr - i;
-            size_t total_bytes_to_read = MEMORY_CHUNK_SIZE + pattern_len - 1;
-
-            if (total_bytes_to_read > bytes_left) {
-                total_bytes_to_read = bytes_left;
-            }
-
+        for (unsigned long long i = start_addr; i < end_addr; i += BYTES_TO_READ) {
             struct iovec local_iov = { 
                 .iov_base = read_buff, 
-                .iov_len = total_bytes_to_read 
+                .iov_len = BYTES_TO_READ 
             };
 
             struct iovec remote_iov = {  
                 .iov_base = (void *)i,
-                .iov_len = total_bytes_to_read
+                .iov_len = BYTES_TO_READ
             };
 
-           
             ssize_t bytes_read = process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0);
 
             if (bytes_read == -1) {
                 continue;
             }
 
-            for (size_t j = 0; j <= (size_t)bytes_read - pattern_len; ++j) {
+            for (ssize_t j = 0; j <= bytes_read; ++j) {
                 int match = 1;
 
                 for (size_t k = 0; k < pattern_len; ++k) {
@@ -125,17 +116,13 @@ unsigned long long sig_scan(char* pattern, char *target_file, pid_t pid) {
 
                 if (match) {
                     unsigned long long found_value = i + j;
-
-                    free(read_buff);
                     fclose(maps_file);
-
                     return found_value;
                 }
             }
         }
     }
 
-    free(read_buff);
     fclose(maps_file);
 
     return -1;
